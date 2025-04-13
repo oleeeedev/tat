@@ -1,4 +1,5 @@
-import 'https://cdn.jsdelivr.net/gh/orestbida/cookieconsent@3.1.0/dist/cookieconsent.umd.js';
+// Import der lokalen CookieConsent-Datei
+import '/assets/vendor/cookieconsent/cookieconsent.umd.js';
 
 // Dark Mode aktivieren
 document.documentElement.classList.add('cc--darkmode');
@@ -20,85 +21,67 @@ function checkCookieConsent() {
     return false;
 }
 
-// Sofortige Überprüfung und Blockierung von Maps
-const initialConsent = checkCookieConsent();
-const blockStyle = document.createElement('style');
-blockStyle.id = 'maps-block-style';
-blockStyle.textContent = 'iframe[src*="google.com/maps"] { display: none !important; }';
-if (!initialConsent) {
-    document.head.appendChild(blockStyle);
-}
-
 // Funktion zum Verwalten der Google Maps Anzeige
 function handleGoogleMaps(consent) {
-    // Entferne oder füge den Blockier-Style hinzu
-    const existingStyle = document.getElementById('maps-block-style');
-    if (consent && existingStyle) {
-        existingStyle.remove();
-    } else if (!consent && !existingStyle) {
-        document.head.appendChild(blockStyle);
-    }
-
-    const mapElements = document.querySelectorAll('iframe[src*="google.com/maps"]');
+    const mapElements = document.querySelectorAll('iframe[data-src*="google.com/maps"], iframe[src*="google.com/maps"]');
     
     mapElements.forEach(map => {
         const container = map.parentElement;
-        const mapUrl = map.getAttribute('data-src') || map.src;
         
-        // Speichere die ursprüngliche URL
-        if (!map.getAttribute('data-src')) {
-            map.setAttribute('data-src', mapUrl);
+        // Stelle sicher, dass wir data-src haben
+        if (!map.hasAttribute('data-src')) {
+            map.setAttribute('data-src', map.src);
+            map.removeAttribute('src');
         }
         
         if (!consent) {
-            // Wenn keine Einwilligung, Maps durch Platzhalter ersetzen
-            map.src = 'about:blank';
-            map.style.display = 'none';
-            
-            const placeholder = document.createElement('div');
-            placeholder.className = 'maps-placeholder';
-            placeholder.style.cssText = `
-                background: #f0f0f0;
-                padding: 20px;
-                border-radius: 8px;
-                text-align: center;
-                min-height: 200px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                flex-direction: column;
-                gap: 10px;
-            `;
-            
-            placeholder.innerHTML = `
-                <i class="bi bi-geo-alt" style="font-size: 2rem; color: #666;"></i>
-                <p style="margin: 0;">Um Google Maps anzuzeigen, stimmen Sie bitte der Verwendung von Google Maps Cookies zu.</p>
-                <button onclick="CookieConsent.showPreferences()" style="
-                    background: #2e79ab;
-                    color: white;
-                    border: none;
-                    padding: 8px 16px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    margin-top: 10px;
-                ">Cookie-Einstellungen öffnen</button>
-            `;
-            
+            // Wenn keine Einwilligung, Platzhalter anzeigen
             if (!container.querySelector('.maps-placeholder')) {
+                const placeholder = document.createElement('div');
+                placeholder.className = 'maps-placeholder';
+                placeholder.style.cssText = `
+                    background: #f0f0f0;
+                    padding: 20px;
+                    border-radius: 8px;
+                    text-align: center;
+                    height: 300px;
+                    max-height: 100%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-direction: column;
+                    gap: 10px;
+                    margin: 0;
+                `;
+                
+                placeholder.innerHTML = `
+                    <i class="bi bi-geo-alt" style="font-size: 2rem; color: #666;"></i>
+                    <p style="margin: 0;">Um Google Maps anzuzeigen, stimmen Sie bitte der Verwendung von Google Maps Cookies zu.</p>
+                    <button onclick="CookieConsent.showPreferences()" style="
+                        background: #2e79ab;
+                        color: white;
+                        border: none;
+                        padding: 8px 16px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        margin-top: 10px;
+                    ">Cookie-Einstellungen öffnen</button>
+                `;
+                
+                map.style.display = 'none';
                 container.appendChild(placeholder);
             }
         } else {
-            // Wenn Einwilligung vorhanden, Maps anzeigen und Platzhalter entfernen
+            // Wenn Einwilligung vorhanden, Maps laden und anzeigen
             const placeholder = container.querySelector('.maps-placeholder');
             if (placeholder) {
                 placeholder.remove();
             }
             
-            // Stelle sicher, dass die Map neu geladen wird
-            map.style.display = 'block';
-            if (map.src === 'about:blank' || !map.src.includes('google.com/maps')) {
-                map.src = mapUrl;
+            if (!map.src || map.src === 'about:blank') {
+                map.src = map.getAttribute('data-src');
             }
+            map.style.display = 'block';
         }
     });
 }
@@ -116,6 +99,28 @@ function applyCookieSettings() {
     handleGoogleMaps(mapsConsent);
 }
 
+// Initialisierung beim Laden der Seite
+document.addEventListener('DOMContentLoaded', () => {
+    const consent = checkCookieConsent();
+    handleGoogleMaps(consent);
+});
+
+// Beobachte DOM-Änderungen für dynamisch geladene Maps
+const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        if (mutation.addedNodes.length) {
+            const consent = checkCookieConsent();
+            handleGoogleMaps(consent);
+        }
+    });
+});
+
+observer.observe(document.body, {
+    childList: true,
+    subtree: true
+});
+
+// Cookie Consent Konfiguration
 CookieConsent.run({
     guiOptions: {
         consentModal: {
